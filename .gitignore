@@ -1,0 +1,22 @@
+# Dependency directories
+node_modules/
+
+# Dependency lock files
+yarn.lock
+# OR if you're using npm, ignore this instead:
+# package-lock.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Optional: OS / editor / IDE files
+.DS_Store
+.env
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/
