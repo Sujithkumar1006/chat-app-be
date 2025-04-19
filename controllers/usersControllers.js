@@ -1,10 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../models/users");
 
-const AUTH0_ENDPOINT = "https://dev-cdsfu1xs67k0fh7b.us.auth0.com/oauth/token";
-const AUTH0_USER_ENDPOINT =
-  "https://dev-cdsfu1xs67k0fh7b.us.auth0.com/api/v2/users";
-
 const syncUser = async (req, res) => {
   const { sub, email, name, picture, email_verified } = req.body;
   try {
@@ -48,16 +44,15 @@ const allUsers = async (req, res) => {
 
 async function fetchMgmntApiToken() {
   try {
-    const auth0Response = await fetch(AUTH0_ENDPOINT, {
+    const auth0Response = await fetch(process.env.AUTH0_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        client_id: "2HQCnB3j2GGNaIBOD0ezFWzwzYUC98UL",
-        client_secret:
-          "08dvws6TEwQuvBfPUS_8eeJ7-wHM0FKAtiZgS18MEgSecYNNh9O900Fh9ONwt9ib",
-        audience: "https://dev-cdsfu1xs67k0fh7b.us.auth0.com/api/v2/",
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+        audience: process.env.AUTH0_AUDIENCE,
         grant_type: "client_credentials",
       }),
     });
@@ -73,7 +68,7 @@ async function fetchMgmntApiToken() {
 
 async function fetchUsersfromAuth0(accessToken) {
   try {
-    const usersResponse = await fetch(AUTH0_USER_ENDPOINT, {
+    const usersResponse = await fetch(process.env.AUTH0_USER_ENDPOINT, {
       headers: {
         authorization: `Bearer ${accessToken}`,
       },

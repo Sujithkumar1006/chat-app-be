@@ -5,17 +5,18 @@ const database = require("./config/database");
 const userRoutes = require("./routes/users");
 const messageRoutes = require("./routes/chats");
 const chatControllers = require("./controllers/chatControllers");
-const { v4: uuidv4 } = require("uuid");
 
 const { auth } = require("express-oauth2-jwt-bearer");
+require("dotenv").config({ path: `./.env.${process.env.NODE_ENV}` });
+console.log(process.env);
 
 const jwtCheck = auth({
-  audience: "https://dev-cdsfu1xs67k0fh7b.us.auth0.com/api/v2/",
-  issuerBaseURL: "https://dev-cdsfu1xs67k0fh7b.us.auth0.com/",
-  tokenSigningAlg: "RS256",
+  audience: process.env.AUTH0_AUDIENCE,
+  issuerBaseURL: process.env.ISSUER_BASE_URL,
+  tokenSigningAlg: process.env.TOKEN_SIGNATURE,
 });
 
-const allowedOrigins = ["http://localhost:3000"];
+const allowedOrigins = [process.env.REACT_APP];
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -49,7 +50,7 @@ const server = app.listen(3001, () => {
 const io = require("socket.io")(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "http://localhost:3000",
+    origin: process.env.REACT_APP,
     // credentials: true,
   },
 });
