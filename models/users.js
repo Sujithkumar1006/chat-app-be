@@ -1,5 +1,19 @@
 const mongoose = require("mongoose");
 
+const autoDestructSchema = new mongoose.Schema(
+  {
+    recipientId: {
+      type: String,
+      required: true,
+    },
+    ttl: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     auth0_id: {
@@ -21,11 +35,9 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    preferences: {
-      autoDeleteTimer: {
-        type: Number,
-        default: 60,
-      },
+    autoDestructSettings: {
+      type: [autoDestructSchema],
+      default: [],
     },
   },
   { timestamps: true }

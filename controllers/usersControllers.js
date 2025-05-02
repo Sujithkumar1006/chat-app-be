@@ -80,4 +80,33 @@ async function fetchUsersfromAuth0(accessToken) {
   }
 }
 
-module.exports = { allUsers, syncUser };
+async function updateMessageSettings(req, res) {
+  try {
+    const { senderId, recipientId, ttl } = req.body;
+    if (!senderId || !recipientId || ttl == null) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+    const user = await User.findOne({ auth0_id: senderId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const existingSetting = user.autoDestructSettings.find(
+      (s) => s.recipientId === recipientId
+    );
+    if (existingSetting) {
+      existingSetting.ttl = ttl;
+    } else {
+      user.autoDestructSettings.push({ recipientId, ttl });
+    }
+
+    await user.save();
+
+    res.status(200).json({ message: "status" });
+  } catch (err) {
+    console.log("Error", err);
+    res.status(500).json({ message: "failed" });
+  }
+}
+
+module.exports = { allUsers, syncUser, updateMessageSettings };

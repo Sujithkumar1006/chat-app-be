@@ -5,10 +5,13 @@ const database = require("./config/database");
 const userRoutes = require("./routes/users");
 const messageRoutes = require("./routes/chats");
 const chatControllers = require("./controllers/chatControllers");
+const path = require("path");
+const fs = require("fs");
+const { v4: uuidv4 } = require("uuid");
+const Messages = require("./models/message");
 
 const { auth } = require("express-oauth2-jwt-bearer");
 require("dotenv").config({ path: `./.env.${process.env.NODE_ENV}` });
-console.log(process.env);
 
 const jwtCheck = auth({
   audience: process.env.AUTH0_AUDIENCE,
@@ -34,6 +37,8 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 //Auth0 Middleware for all routes
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 app.use(jwtCheck);
 
 app.use("/api/user", userRoutes);
@@ -66,30 +71,13 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  console.log("User connected", socket);
-
   socket.on("register", (userId) => {
     users[userId] = socket.id;
     io.emit("online_users", Object.keys(users));
     console.log(`${userId} registered with socket ID ${socket.id}`);
   });
 
-  //   {
-  //     "_id": "67fe769c6d797559d29d55d9",
-  //     "sender": "auth0|67c60712c9af2f9686929a2a",
-  //     "recipient": "google-oauth2|114693529677916280088",
-  //     "content": "Hi, Kya",
-  //     "imageUrl": null,
-  //     "isRead": false,
-  //     "autoDeleteAt": null,
-  //     "timestamp": "2025-04-11T14:51:16.000Z",
-  //     "createdAt": "2025-04-15T15:09:16.019Z",
-  //     "updatedAt": "2025-04-15T15:09:16.019Z",
-  //     "__v": 0
-  // }
-
   socket.on("send_message", async (req) => {
-    //Save Message to DB
     const message = await chatControllers.createMessage(req);
     const targetSocket = users[req.reciever_id];
     if (targetSocket) {
@@ -98,13 +86,32 @@ io.on("connection", (socket) => {
     io.to(users[req.sender_id]).emit("receive_message", message); // Sending to Sender
   });
 
-  socket.on("read_message", async ({ messageId, senderId }) => {
+  socket.on("read_message", async ({ messageId, senderId, recieverId }) => {
     console.log("read_message", messageId, senderId);
     const targetSocket = users[senderId];
     await chatControllers.updateReadReciept(messageId);
     if (targetSocket) {
       io.to(targetSocket)?.emit("message_read", { messageId });
+      io.to(users[recieverId])?.emit("message_read", { messageId });
     }
+  });
+
+  socket.on("send_image", async ({ imageBuffer, fileName, ...rest }) => {
+    const newFileName = uuidv4() + fileName;
+    const filePath = path.join(__dirname, "uploads", newFileName);
+    fs.writeFile(filePath, imageBuffer, (err) => {
+      if (err) {
+        console.error("File save error:", err);
+        return;
+      }
+      console.log("Image saved:", filePath);
+    });
+    console.log("Image saved:", filePath);
+    const imageUrl = `http://localhost:3001/uploads/${newFileName}`;
+    // const { reciever_id, message, time, imageUrl, sender_id } = body;
+    const message = await chatControllers.createMessage({ ...rest, imageUrl });
+    io.to(users[rest.sender_id]).emit("receive_image", message);
+    io.to(users[rest.reciever_id]).emit("receive_image", message);
   });
 
   socket.on("disconnect", () => {
@@ -117,3 +124,42 @@ io.on("connection", (socket) => {
     io.emit("online_users", Object.keys(users));
   });
 });
+
+const deleteExpiredMessages = async () => {
+  try {
+    const now = new Date();
+    const expiredMessages = await Messages.find({
+      autoDeleteAt: { $ne: null, $lte: now },
+      isDeleted: false,
+    });
+
+    if (expiredMessages.length > 0) {
+      const messageIds = expiredMessages.map((msg) => msg._id);
+      const recipients = expiredMessages.map((msg) => msg.recipient);
+      const senders = expiredMessages.map((msg) => msg.sender);
+
+      await Messages.updateMany(
+        { _id: { $in: messageIds } },
+        { $set: { isDeleted: true } }
+      );
+
+      console.log(`Auto-deleted ${messageIds.length} messages`);
+
+      messageIds.forEach((id, index) => {
+        const recipientSocket = users[recipients[index]];
+        const senderSocket = users[senders[index]];
+
+        if (recipientSocket) {
+          io.to(recipientSocket).emit("message_deleted", { messageId: id });
+        }
+        if (senderSocket) {
+          io.to(senderSocket).emit("message_deleted", { messageId: id });
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Error auto-deleting messages:", err);
+  }
+};
+
+setInterval(deleteExpiredMessages, 60 * 1000);

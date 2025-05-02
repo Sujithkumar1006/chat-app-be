@@ -1,4 +1,5 @@
 const Messages = require("../models/message");
+const User = require("../models/users");
 
 const getChatUsers = async (req, res) => {
   const { sub: loggedInUserId } = req?.auth?.payload;
@@ -90,7 +91,11 @@ const fetchMessages = async (req, res) => {
       ],
     }).sort({ timestamp: 1 });
 
-    res.status(200).json({ messages });
+    const userSettings = await User.findOne({ auth0_id: auth0_id });
+
+    res
+      .status(200)
+      .json({ messages, settings: userSettings.autoDestructSettings });
   } catch (err) {
     console.error("Error in fetchMessages:", err);
     res.status(500).json({ message: "Error fetching messages" });
@@ -102,13 +107,20 @@ const createMessage = async (body) => {
   // const { sub: auth0_id } = req?.auth?.payload;
   console.log("reqqq", body);
   try {
+    const user = await User.findOne({ auth0_id: sender_id });
+    const existingSetting = user.autoDestructSettings.find(
+      (s) => s.recipientId === reciever_id
+    );
     const newMessageObj = {
       sender: sender_id,
       recipient: reciever_id,
-      content: message,
+      content: message ?? "",
       imageUrl,
       isRead: false,
       timestamp: new Date(time),
+      autoDeleteAt: existingSetting
+        ? new Date(new Date(time).getTime() + existingSetting.ttl * 1000)
+        : null,
     };
     const savedMessage = await Messages.create(newMessageObj);
     return savedMessage;
